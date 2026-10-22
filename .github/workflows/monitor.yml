@@ -1,0 +1,36 @@
+name: GoRest API Monitor
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # chạy mỗi giờ
+  workflow_dispatch:       # cho phép chạy thủ công
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kiểm tra GET /users (thời gian phản hồi < 800ms)
+        run: |
+          RESULT=$(curl -s -o /dev/null \
+            -H "Authorization: Bearer ${{ secrets.GOREST_TOKEN }}" \
+            -w "%{http_code} %{time_total}" \
+            https://gorest.co.in/public/v2/users)
+
+          STATUS=$(echo "$RESULT" | awk '{print $1}')
+          TIME_MS=$(echo "$RESULT" | awk '{printf "%d", $2 * 1000}')
+
+          echo "HTTP status: $STATUS"
+          echo "Response time: ${TIME_MS} ms"
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::GET /users trả về status $STATUS (mong đợi 200)"
+            exit 1
+          fi
+
+          if [ "$TIME_MS" -ge 800 ]; then
+            echo "::error::Thời gian phản hồi ${TIME_MS}ms vượt ngưỡng 800ms"
+            exit 1
+          fi
+
+          echo "OK: API phản hồi trong ${TIME_MS}ms (< 800ms)"
